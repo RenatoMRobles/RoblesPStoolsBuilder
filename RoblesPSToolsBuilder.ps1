@@ -1,9 +1,13 @@
-﻿# --- 0. AUTO-ELEVACIÓN A ADMINISTRADOR ---
-if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Elevating privileges to Administrator..." -ForegroundColor Yellow
-    Start-Process PowerShell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    Exit
-}
+﻿# --- 0. C# NINJA CLOAK (INVISIBILIDAD NATIVA) ---
+# Compilamos la llamada a la API de Windows para ocultar la consola en 1 ms
+Add-Type -Name Window -Namespace Console -MemberDefinition '
+[DllImport("Kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+'
+$consolePtr = [Console.Window]::GetConsoleWindow()
+[Console.Window]::ShowWindow($consolePtr, 0) | Out-Null # 0 = Ocultar ventana
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -14,11 +18,9 @@ $backupWarning = "Prior using this tool please make sure create a back up of you
 "- Optional: With SSMS (SQL Server Management Studio) > Login with your Administrator credentials (Typically the Domain admin service account currently running the Milestone Services) > Expand the Databases node > Right click the 'Surveillance', 'Surveillance_IDP', and 'Surveillance_log' databases > Click Tasks > Backup > Create a .bak file backup and save it somewhere safe."
 
 $resp1 = [System.Windows.Forms.MessageBox]::Show($backupWarning, "Backup Recommended", [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning)
-
 if ($resp1 -ne 'OK') { return }
 
 $resp2 = [System.Windows.Forms.MessageBox]::Show("I confirm I've created a configuration backup.", "Security Confirmation", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
-
 if ($resp2 -ne 'Yes') { return }
 
 # --- 2. DETECCIÓN DE VERSIONES ---
@@ -42,7 +44,7 @@ elseif ($xpVersion -match "^(1[0-9]\.)") { $neededPSTools = "Incompatible" }
 # --- 3. CONFIGURACIÓN DE LA VENTANA PRINCIPAL (DARK MODE) ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Robles & Robles - XProtect Advanced Scanner"
-$form.Size = New-Object System.Drawing.Size(460, 880) # Altura expandida para Device Pack
+$form.Size = New-Object System.Drawing.Size(460, 880) 
 $form.StartPosition = 'CenterScreen'
 $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $form.ForeColor = [System.Drawing.Color]::WhiteSmoke
@@ -75,7 +77,6 @@ $cbForceLogin.Size = New-Object System.Drawing.Size(400, 20)
 $cbForceLogin.ForeColor = [System.Drawing.Color]::LightCoral
 $form.Controls.Add($cbForceLogin)
 
-# NUEVO: Espacio ampliado para mostrar el Device Pack
 $lblVersions = New-Object System.Windows.Forms.Label
 $lblVersions.Text = "Installed PSTools: $psToolsVer`nXProtect Local Version: $xpVersion`nTarget RS Device Pack: Waiting for connection..."
 $lblVersions.Location = New-Object System.Drawing.Point(20, 135)
@@ -129,7 +130,6 @@ $form.Controls.Add($group)
 
 $yOffset = 20
 $checkboxes = @{}
-# NUEVO: Columna 'Device Pack' añadida
 $columnNames = @("RecordingServer", "Device Pack", "Hardware", "IP Address", "MAC Address", "Firmware", "Channel", "Camera Name", "Enabled", "Res Stream 1", "FPS Stream 1", "Status Stream 1", "Res Stream 2", "FPS Stream 2", "Status Stream 2")
 
 foreach ($col in $columnNames) {
@@ -243,13 +243,11 @@ function Generate-Report {
 
         $rs = Get-VmsRecordingServer -Name $serverName -ErrorAction Stop
         
-        # --- NUEVO: Extracción de Device Pack del servidor remoto ---
         $dpVersion = "Unknown"
         if ($rs.DevicePackVersion) { $dpVersion = $rs.DevicePackVersion }
         elseif ($rs.Properties -and $rs.Properties["DevicePackVersion"]) { $dpVersion = $rs.Properties["DevicePackVersion"] }
         elseif ($rs.Properties -and $rs.Properties.DevicePackVersion) { $dpVersion = $rs.Properties.DevicePackVersion }
         
-        # Actualizamos la UI en tiempo real
         $lblVersions.Text = "Installed PSTools: $psToolsVer`nXProtect Local Version: $xpVersion`nTarget RS Device Pack: $dpVersion"
         [System.Windows.Forms.Application]::DoEvents()
         
@@ -271,13 +269,11 @@ function Generate-Report {
 
             if ($cbIgnoreDisabled.Checked -and $hw.Enabled -eq $false) { continue }
 
-            # --- CORRECCIÓN ABSOLUTA PARA MAC Y FIRMWARE ---
             $hwSettings = $hw | Get-HardwareSetting -ErrorAction SilentlyContinue
             $firmware = "N/A"
             $mac = "N/A"
             
             if ($null -ne $hwSettings) {
-                # Se consultan las propiedades directas del objeto en lugar de tratarlo como arreglo
                 if ($hwSettings.FirmwareVersion) { $firmware = $hwSettings.FirmwareVersion }
                 elseif ($hwSettings.Firmware) { $firmware = $hwSettings.Firmware }
                 
@@ -400,7 +396,6 @@ function Generate-Report {
 
 $btnCSV.Add_Click({ Generate-Report -FormatType "CSV" })
 $btnTXT.Add_Click({ Generate-Report -FormatType "TXT" })
-
 
 # --- 7. GESTOR DE VENTANAS (LOOP BREAK ARCHITECTURE) ---
 $runApp = $true
