@@ -19,7 +19,6 @@ $backupWarning = "Prior using this tool please make sure to create a back up of 
 $resp1 = [System.Windows.Forms.MessageBox]::Show($backupWarning, "Backup Recommended", [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning)
 
 if ($resp1 -ne 'OK') { return }
-# ELIMINADO EL SEGUNDO POP-UP POR DIRECTIVA DE USUARIO
 
 # --- 2. DETECCIÓN DE VERSIONES ---
 $installedModule = Get-Module -Name MilestonePSTools -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
@@ -42,14 +41,13 @@ elseif ($xpVersion -match "^(1[0-9]\.)") { $neededPSTools = "Incompatible" }
 # --- 3. CONFIGURACIÓN DE LA VENTANA PRINCIPAL (DARK MODE) ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "XProtect Report Builder - Advanced VMS Scanner"
-$form.Size = New-Object System.Drawing.Size(460, 830) # Altura optimizada tras remover Device Pack
+$form.Size = New-Object System.Drawing.Size(460, 830)
 $form.StartPosition = 'CenterScreen'
 $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $form.ForeColor = [System.Drawing.Color]::WhiteSmoke
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 
-# Extraer el icono del .exe compilado para que la ventana luzca profesional
 try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon([System.Windows.Forms.Application]::ExecutablePath) } catch {}
 
 $btnBackColor = [System.Drawing.Color]::FromArgb(60, 63, 65)
@@ -78,7 +76,6 @@ $cbForceLogin.Size = New-Object System.Drawing.Size(400, 20)
 $cbForceLogin.ForeColor = [System.Drawing.Color]::LightCoral
 $form.Controls.Add($cbForceLogin)
 
-# Label de versiones limpio (Sin Device Pack)
 $lblVersions = New-Object System.Windows.Forms.Label
 $lblVersions.Text = "Installed PSTools: $psToolsVer`nXProtect Local Version: $xpVersion"
 $lblVersions.Location = New-Object System.Drawing.Point(20, 135)
@@ -131,7 +128,6 @@ $form.Controls.Add($group)
 
 $yOffset = 20
 $checkboxes = @{}
-# Matriz de columnas purgada y validada
 $columnNames = @("RecordingServer", "Hardware", "IP Address", "MAC Address", "Firmware", "Channel", "Camera Name", "Enabled", "Res Stream 1", "FPS Stream 1", "Status Stream 1", "Res Stream 2", "FPS Stream 2", "Status Stream 2")
 
 foreach ($col in $columnNames) {
@@ -213,13 +209,10 @@ $btnInstall.Add_Click({
     }
 })
 
-$btnConnect.Add_Click({
-    $noticeMsg = "The application will securely load the Milestone login prompt.`n`n(The app will safely remain active in your taskbar during authentication)."
-    [System.Windows.Forms.MessageBox]::Show($noticeMsg, "Connecting to Milestone API", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-    
+# --- UX MEJORADA: ELIMINACIÓN DEL AVISO EXTRA, AHORA MANEJADO POR LA SALA DE ESPERA ---
+$btnConnect.Add_Click({    
     $form.DialogResult = [System.Windows.Forms.DialogResult]::Retry
 })
-
 
 # --- 6. FUNCIÓN DE EXTRACCIÓN ---
 function Generate-Report {
@@ -393,7 +386,7 @@ function Generate-Report {
 $btnCSV.Add_Click({ Generate-Report -FormatType "CSV" })
 $btnTXT.Add_Click({ Generate-Report -FormatType "TXT" })
 
-# --- 7. GESTOR DE VENTANAS (LOOP BREAK ARCHITECTURE & DUMMY FORM) ---
+# --- 7. GESTOR DE VENTANAS (SALA DE ESPERA INTERACTIVA) ---
 $runApp = $true
 
 while ($runApp) {
@@ -401,13 +394,28 @@ while ($runApp) {
     
     if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Retry) {
         
-        # EL TRUCO NINJA: Formulario fantasma para sostener el icono en la barra de tareas
-        $dummy = New-Object System.Windows.Forms.Form
-        $dummy.Text = "XProtect Report Builder - Authenticating..."
-        $dummy.Icon = $form.Icon
-        $dummy.ShowInTaskbar = $true
-        $dummy.WindowState = 'Minimized'
-        $dummy.Show()
+        # EL TRUCO NINJA MEJORADO: Ventana visible que guía al usuario
+        $waitRoom = New-Object System.Windows.Forms.Form
+        $waitRoom.Text = "Authentication in Progress..."
+        $waitRoom.Size = New-Object System.Drawing.Size(380, 160)
+        $waitRoom.StartPosition = 'CenterScreen'
+        $waitRoom.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+        $waitRoom.ForeColor = [System.Drawing.Color]::WhiteSmoke
+        $waitRoom.FormBorderStyle = 'FixedDialog'
+        $waitRoom.MaximizeBox = $false
+        $waitRoom.MinimizeBox = $false
+        $waitRoom.ShowInTaskbar = $true
+        try { $waitRoom.Icon = $form.Icon } catch {}
+
+        $lblWait = New-Object System.Windows.Forms.Label
+        $lblWait.Text = "⏳ Waiting for Milestone Authentication...`n`nPlease enter your credentials in the`nMilestonePSTools popup window.`n`n(If you don't see it, check your taskbar)."
+        $lblWait.Dock = 'Fill'
+        $lblWait.TextAlign = 'MiddleCenter'
+        $lblWait.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $waitRoom.Controls.Add($lblWait)
+
+        $waitRoom.Show()
+        [System.Windows.Forms.Application]::DoEvents()
 
         try {
             if ($cbForceLogin.Checked) {
@@ -416,16 +424,14 @@ while ($runApp) {
                 Connect-ManagementServer -ShowDialog -AcceptEula -Force | Out-Null
             }
             
-            # --- POBLACIÓN DE SERVIDORES CON MATRIZ FORZADA PARA EL COMBOBOX ---
+            # --- POBLACIÓN DE SERVIDORES ---
             if (Get-VmsSite -ErrorAction SilentlyContinue) {
-                # Forzamos la consulta a ser un arreglo @() para evitar iteraciones nulas
                 $rsList = @(Get-VmsRecordingServer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
                 if ($rsList.Count -gt 0) {
                     $cboServer.Items.Clear()
                     foreach ($rsName in $rsList) {
                         [void]$cboServer.Items.Add($rsName)
                     }
-                    # Seleccionamos automáticamente el primer servidor de la lista
                     $cboServer.Text = $cboServer.Items[0]
                 }
             }
@@ -437,8 +443,8 @@ while ($runApp) {
             $lblStatus.Text = "Connection aborted or cancelled."
             $lblStatus.ForeColor = [System.Drawing.Color]::Orange
         } finally {
-            # Destruimos el fantasma; la ventana principal reaparece instantáneamente
-            $dummy.Dispose()
+            # Destruimos la Sala de Espera; la ventana principal reaparece instantáneamente
+            $waitRoom.Dispose()
         }
     } else {
         $runApp = $false
