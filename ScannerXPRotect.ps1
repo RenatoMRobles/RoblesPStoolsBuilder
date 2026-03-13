@@ -1,4 +1,4 @@
-﻿# --- 0. C# NINJA CLOAK (INVISIBILIDAD NATIVA) ---
+﻿# --- 0. C# NINJA CLOAK (INVISIBILIDAD NATIVA DE CONSOLA) ---
 Add-Type -Name Window -Namespace Console -MemberDefinition '
 [DllImport("Kernel32.dll")]
 public static extern IntPtr GetConsoleWindow();
@@ -6,21 +6,20 @@ public static extern IntPtr GetConsoleWindow();
 public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
 '
 $consolePtr = [Console.Window]::GetConsoleWindow()
-[Console.Window]::ShowWindow($consolePtr, 0) | Out-Null # Oculta la consola negra al instante
+[Console.Window]::ShowWindow($consolePtr, 0) | Out-Null
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# --- 1. POP-UPS DE SEGURIDAD (PREVENCIÓN) ---
-$backupWarning = "Prior using this tool please make sure create a back up of your existing configurations:`n`n" +
+# --- 1. POP-UPS DE SEGURIDAD (PREVENCIÓN SIMPLIFICADA) ---
+$backupWarning = "Prior using this tool please make sure to create a back up of your existing configurations:`n`n" +
 "- From the Management client > Click File > Create a Configuration backup > Save your .cnf file somewhere safe.`n`n" +
-"- Optional: With SSMS (SQL Server Management Studio) > Login with your Administrator credentials (Typically the Domain admin service account currently running the Milestone Services) > Expand the Databases node > Right click the 'Surveillance', 'Surveillance_IDP', and 'Surveillance_log' databases > Click Tasks > Backup > Create a .bak file backup and save it somewhere safe."
+"- Optional: With SSMS (SQL Server Management Studio) > Login with your Administrator credentials > Expand the Databases node > Right click the 'Surveillance', 'Surveillance_IDP', and 'Surveillance_log' databases > Click Tasks > Backup > Create a .bak file backup and save it somewhere safe."
 
 $resp1 = [System.Windows.Forms.MessageBox]::Show($backupWarning, "Backup Recommended", [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning)
-if ($resp1 -ne 'OK') { return }
 
-$resp2 = [System.Windows.Forms.MessageBox]::Show("I confirm I've created a configuration backup.", "Security Confirmation", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
-if ($resp2 -ne 'Yes') { return }
+if ($resp1 -ne 'OK') { return }
+# ELIMINADO EL SEGUNDO POP-UP POR DIRECTIVA DE USUARIO
 
 # --- 2. DETECCIÓN DE VERSIONES ---
 $installedModule = Get-Module -Name MilestonePSTools -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
@@ -43,12 +42,15 @@ elseif ($xpVersion -match "^(1[0-9]\.)") { $neededPSTools = "Incompatible" }
 # --- 3. CONFIGURACIÓN DE LA VENTANA PRINCIPAL (DARK MODE) ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "XProtect Report Builder - Advanced VMS Scanner"
-$form.Size = New-Object System.Drawing.Size(460, 850) # Altura reajustada
+$form.Size = New-Object System.Drawing.Size(460, 830) # Altura optimizada tras remover Device Pack
 $form.StartPosition = 'CenterScreen'
 $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $form.ForeColor = [System.Drawing.Color]::WhiteSmoke
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
+
+# Extraer el icono del .exe compilado para que la ventana luzca profesional
+try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon([System.Windows.Forms.Application]::ExecutablePath) } catch {}
 
 $btnBackColor = [System.Drawing.Color]::FromArgb(60, 63, 65)
 
@@ -76,6 +78,7 @@ $cbForceLogin.Size = New-Object System.Drawing.Size(400, 20)
 $cbForceLogin.ForeColor = [System.Drawing.Color]::LightCoral
 $form.Controls.Add($cbForceLogin)
 
+# Label de versiones limpio (Sin Device Pack)
 $lblVersions = New-Object System.Windows.Forms.Label
 $lblVersions.Text = "Installed PSTools: $psToolsVer`nXProtect Local Version: $xpVersion"
 $lblVersions.Location = New-Object System.Drawing.Point(20, 135)
@@ -90,14 +93,13 @@ $lblServer.Location = New-Object System.Drawing.Point(20, 175)
 $lblServer.AutoSize = $true
 $form.Controls.Add($lblServer)
 
-# --- NUEVO: COMBOBOX HÍBRIDO PARA EL SERVIDOR ---
 $cboServer = New-Object System.Windows.Forms.ComboBox
 $cboServer.Location = New-Object System.Drawing.Point(20, 195)
 $cboServer.Size = New-Object System.Drawing.Size(400, 20)
 $cboServer.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
 $cboServer.ForeColor = [System.Drawing.Color]::White
 $cboServer.FlatStyle = 'Flat'
-$cboServer.DropDownStyle = 'DropDown' # Permite escribir manualmente O elegir de la lista
+$cboServer.DropDownStyle = 'DropDown' 
 $cboServer.Text = "enter here your RS Hostname or FQDN..."
 $form.Controls.Add($cboServer)
 
@@ -123,13 +125,13 @@ $form.Controls.Add($cbIgnoreDisabled)
 $group = New-Object System.Windows.Forms.GroupBox
 $group.Text = "Select Columns to Include"
 $group.Location = New-Object System.Drawing.Point(20, 255)
-$group.Size = New-Object System.Drawing.Size(400, 410)
+$group.Size = New-Object System.Drawing.Size(400, 385)
 $group.ForeColor = [System.Drawing.Color]::WhiteSmoke
 $form.Controls.Add($group)
 
 $yOffset = 20
 $checkboxes = @{}
-# Device Pack removido de la lista
+# Matriz de columnas purgada y validada
 $columnNames = @("RecordingServer", "Hardware", "IP Address", "MAC Address", "Firmware", "Channel", "Camera Name", "Enabled", "Res Stream 1", "FPS Stream 1", "Status Stream 1", "Res Stream 2", "FPS Stream 2", "Status Stream 2")
 
 foreach ($col in $columnNames) {
@@ -140,32 +142,32 @@ foreach ($col in $columnNames) {
     $cb.Checked = $true
     $group.Controls.Add($cb)
     $checkboxes[$col] = $cb
-    $yOffset += 27
+    $yOffset += 26
 }
 
 $lblStatus = New-Object System.Windows.Forms.Label
-$lblStatus.Location = New-Object System.Drawing.Point(20, 675)
+$lblStatus.Location = New-Object System.Drawing.Point(20, 650)
 $lblStatus.Size = New-Object System.Drawing.Size(400, 20)
 $lblStatus.ForeColor = [System.Drawing.Color]::SkyBlue
 $lblStatus.Text = "Ready..."
 $form.Controls.Add($lblStatus)
 
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(20, 700)
+$progressBar.Location = New-Object System.Drawing.Point(20, 675)
 $progressBar.Size = New-Object System.Drawing.Size(400, 15)
 $progressBar.Style = 'Blocks'
 $form.Controls.Add($progressBar)
 
 $lblGenerate = New-Object System.Windows.Forms.Label
 $lblGenerate.Text = "Generate Reports:"
-$lblGenerate.Location = New-Object System.Drawing.Point(20, 740)
+$lblGenerate.Location = New-Object System.Drawing.Point(20, 715)
 $lblGenerate.AutoSize = $true
 $lblGenerate.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($lblGenerate)
 
 $btnCSV = New-Object System.Windows.Forms.Button
 $btnCSV.Text = ".csv"
-$btnCSV.Location = New-Object System.Drawing.Point(170, 730)
+$btnCSV.Location = New-Object System.Drawing.Point(170, 705)
 $btnCSV.Size = New-Object System.Drawing.Size(100, 40)
 $btnCSV.BackColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
 $btnCSV.ForeColor = [System.Drawing.Color]::White
@@ -174,14 +176,14 @@ $form.Controls.Add($btnCSV)
 
 $btnTXT = New-Object System.Windows.Forms.Button
 $btnTXT.Text = ".txt"
-$btnTXT.Location = New-Object System.Drawing.Point(280, 730)
+$btnTXT.Location = New-Object System.Drawing.Point(280, 705)
 $btnTXT.Size = New-Object System.Drawing.Size(100, 40)
 $btnTXT.BackColor = [System.Drawing.Color]::FromArgb(34, 139, 34)
 $btnTXT.ForeColor = [System.Drawing.Color]::White
 $btnTXT.FlatStyle = 'Flat'
 $form.Controls.Add($btnTXT)
 
-# --- 5. LÓGICA DE INSTALACIÓN ---
+# --- 5. LÓGICA DE LOS BOTONES ---
 $btnInstall.Add_Click({
     if ($neededPSTools -ne "Latest" -and $neededPSTools -ne "Unknown" -and $xpVersion -ne "Unknown") {
         $msg = "Your XProtect version ($xpVersion) is not compatible with the most recent PSTools available.`nThe version you need is: $($neededPSTools).`n`nPlease check https://milestonepstools.com/help/compatibility/ to find the correct download package."
@@ -211,16 +213,15 @@ $btnInstall.Add_Click({
     }
 })
 
-# --- UX MEJORADA: AVISO ANTES DE OCULTAR LA VENTANA ---
 $btnConnect.Add_Click({
-    $noticeMsg = "The main application window will temporarily hide for a few seconds to safely load the secure Milestone login prompt.`n`nThis is normal behavior to prevent thread collisions."
+    $noticeMsg = "The application will securely load the Milestone login prompt.`n`n(The app will safely remain active in your taskbar during authentication)."
     [System.Windows.Forms.MessageBox]::Show($noticeMsg, "Connecting to Milestone API", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
     
     $form.DialogResult = [System.Windows.Forms.DialogResult]::Retry
 })
 
 
-# --- 6. FUNCIÓN CENTRALIZADA DE EXTRACCIÓN Y EXPORTACIÓN ---
+# --- 6. FUNCIÓN DE EXTRACCIÓN ---
 function Generate-Report {
     param ([string]$FormatType)
 
@@ -392,13 +393,22 @@ function Generate-Report {
 $btnCSV.Add_Click({ Generate-Report -FormatType "CSV" })
 $btnTXT.Add_Click({ Generate-Report -FormatType "TXT" })
 
-# --- 7. GESTOR DE VENTANAS (LOOP BREAK ARCHITECTURE) ---
+# --- 7. GESTOR DE VENTANAS (LOOP BREAK ARCHITECTURE & DUMMY FORM) ---
 $runApp = $true
 
 while ($runApp) {
     $dialogResult = $form.ShowDialog()
     
     if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Retry) {
+        
+        # EL TRUCO NINJA: Formulario fantasma para sostener el icono en la barra de tareas
+        $dummy = New-Object System.Windows.Forms.Form
+        $dummy.Text = "XProtect Report Builder - Authenticating..."
+        $dummy.Icon = $form.Icon
+        $dummy.ShowInTaskbar = $true
+        $dummy.WindowState = 'Minimized'
+        $dummy.Show()
+
         try {
             if ($cbForceLogin.Checked) {
                 Connect-ManagementServer -ShowDialog -AcceptEula -Force -DisableAutoLogin | Out-Null
@@ -406,15 +416,17 @@ while ($runApp) {
                 Connect-ManagementServer -ShowDialog -AcceptEula -Force | Out-Null
             }
             
-            # --- NUEVO: POBLAR EL COMBOBOX AUTOMÁTICAMENTE TRAS LA CONEXIÓN ---
+            # --- POBLACIÓN DE SERVIDORES CON MATRIZ FORZADA PARA EL COMBOBOX ---
             if (Get-VmsSite -ErrorAction SilentlyContinue) {
-                $rsList = Get-VmsRecordingServer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
-                if ($rsList) {
+                # Forzamos la consulta a ser un arreglo @() para evitar iteraciones nulas
+                $rsList = @(Get-VmsRecordingServer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+                if ($rsList.Count -gt 0) {
                     $cboServer.Items.Clear()
                     foreach ($rsName in $rsList) {
-                        $cboServer.Items.Add($rsName) | Out-Null
+                        [void]$cboServer.Items.Add($rsName)
                     }
-                    $cboServer.Text = $cboServer.Items[0] # Selecciona el primero por defecto
+                    # Seleccionamos automáticamente el primer servidor de la lista
+                    $cboServer.Text = $cboServer.Items[0]
                 }
             }
 
@@ -424,6 +436,9 @@ while ($runApp) {
             [System.Windows.Forms.MessageBox]::Show("Login was cancelled or failed: " + $_.Exception.Message, "Connection Alert", 0, [System.Windows.Forms.MessageBoxIcon]::Warning)
             $lblStatus.Text = "Connection aborted or cancelled."
             $lblStatus.ForeColor = [System.Drawing.Color]::Orange
+        } finally {
+            # Destruimos el fantasma; la ventana principal reaparece instantáneamente
+            $dummy.Dispose()
         }
     } else {
         $runApp = $false
