@@ -1,0 +1,1 @@
+Invoke-ps2exe -InputFile "C:\RoblesPStoolsScriptBuilder\RoblesPSToolsBuilder.ps1" -OutputFile "C:\RoblesPStoolsScriptBuilder\RoblesPSToolsBuilder.exe" -IconFile "C:\RoblesPStoolsScriptBuilder\icono.ico" -Title "XProtect Report Generator" -Version "8.0.0.0" -Company "Report Builder" -Product "VMS Advanced Tools" -Copyright "Renato Robles 2026" -RequireAdmin -Force
